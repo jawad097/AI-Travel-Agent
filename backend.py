@@ -17,10 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import openai
 from openai import OpenAI
 
-# Load environment variables
 load_dotenv()
 
-# Initialize Redis connection
 try:
     redis_conn = redis.Redis(
         host=os.getenv("REDIS_HOST", "localhost"),
@@ -43,14 +41,12 @@ class CSVFeedbackManager:
         self._initialize_csv()
     
     def _initialize_csv(self):
-        """Create CSV file with headers if it doesn't exist"""
         if not os.path.exists(CSV_FILENAME):
             with open(CSV_FILENAME, mode='w', newline='', encoding='utf-8') as file:
                 writer = csv.DictWriter(file, fieldnames=CSV_FIELDNAMES)
                 writer.writeheader()
     
     def save_feedback(self, user_id: str, feedback: dict):
-        """Save feedback to CSV"""
         try:
             with open(CSV_FILENAME, mode='a', newline='', encoding='utf-8') as file:
                 writer = csv.DictWriter(file, fieldnames=CSV_FIELDNAMES)
@@ -67,9 +63,7 @@ class CSVFeedbackManager:
 
 feedback_manager = CSVFeedbackManager()
 
-# Redis helper functions
 def save_to_redis(key: str, data: Any, expiration: int = 60*60*24*30) -> bool:
-    """Save data to Redis with expiration (default 30 days)"""
     if redis_conn:
         try:
             redis_conn.set(key, json.dumps(data))
@@ -80,7 +74,6 @@ def save_to_redis(key: str, data: Any, expiration: int = 60*60*24*30) -> bool:
     return False
 
 def get_from_redis(key: str) -> Any:
-    """Get data from Redis"""
     if redis_conn:
         try:
             data = redis_conn.get(key)
@@ -90,19 +83,15 @@ def get_from_redis(key: str) -> Any:
             print(f"Error getting from Redis: {str(e)}")
     return None
 
-# Location and travel helper functions
 def calculate_distance(origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float) -> float:
-    """Calculate distance between two points using Haversine formula (in km)"""
-    # Earth's radius in kilometers
+
     R = 6371.0
     
-    # Convert latitude and longitude from degrees to radians
     lat1 = math.radians(origin_lat)
     lon1 = math.radians(origin_lng)
     lat2 = math.radians(dest_lat)
     lon2 = math.radians(dest_lng)
     
-    # Haversine formula
     dlon = lon2 - lon1
     dlat = lat2 - lat1
     a = math.sin(dlat / 2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2)**2
@@ -112,8 +101,6 @@ def calculate_distance(origin_lat: float, origin_lng: float, dest_lat: float, de
     return distance
 
 def estimate_flight_cost(distance: float, price_level: str) -> float:
-    """Estimate flight cost based on distance and price level"""
-    # Base cost per km
     if price_level == "$":
         base_cost_per_km = 0.10  # Budget airlines
     elif price_level == "$$$":
@@ -121,13 +108,12 @@ def estimate_flight_cost(distance: float, price_level: str) -> float:
     else:  # $$
         base_cost_per_km = 0.20  # Standard airlines
     
-    # Apply distance-based scaling (longer flights are cheaper per km)
     if distance < 1000:
-        scaling_factor = 1.5  # Short flights are more expensive per km
+        scaling_factor = 1.5
     elif distance < 5000:
-        scaling_factor = 1.0  # Medium flights
+        scaling_factor = 1.0
     else:
-        scaling_factor = 0.8  # Long flights are cheaper per km
+        scaling_factor = 0.8
     
     # Calculate base cost
     base_cost = distance * base_cost_per_km * scaling_factor
@@ -139,7 +125,6 @@ def estimate_flight_cost(distance: float, price_level: str) -> float:
     return round(base_cost * variation, -1)
 
 def get_popular_places(destination: str) -> List[Dict[str, Any]]:
-    """Get popular places for a destination"""
     popular_places = {
         "paris": [
             {
@@ -328,7 +313,6 @@ def get_popular_places(destination: str) -> List[Dict[str, Any]]:
         ]
     }
     
-    # Default to empty list if destination not found
     destination_lower = destination.lower()
     for key in popular_places:
         if key in destination_lower:
@@ -338,7 +322,6 @@ def get_popular_places(destination: str) -> List[Dict[str, Any]]:
     return []
 
 class UserPreferences(BaseModel):
-    """Model for user preferences"""
     destination: Optional[str] = None
     budget_range: List[int] = [800, 5000]
     price_preference: str = "$$ - Moderate"
@@ -353,7 +336,6 @@ class UserPreferences(BaseModel):
     language_preferences: List[str] = ["English"]
 
 class UserLocation(BaseModel):
-    """Model for user location"""
     lat: float
     lng: float
     address: str = "Unknown"
@@ -364,9 +346,7 @@ class TravelAgentModel:
         self.rapidapi_key = os.getenv("RAPIDAPI_KEY")
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
         
-        # Check if the API key is properly formatted
         if self.openai_api_key:
-            # Remove quotes if they exist in the API key
             if self.openai_api_key.startswith('"') and self.openai_api_key.endswith('"'):
                 self.openai_api_key = self.openai_api_key[1:-1]
             
@@ -375,13 +355,11 @@ class TravelAgentModel:
         else:
             print("WARNING: OpenAI API Key not found in environment variables")
             
-        # Initialize in-memory user contexts (will be backed by Redis)
         self.user_contexts = {}
         print("AI Travel Agent initialized")
 
     def get_user_context(self, user_id: str) -> Dict[str, Any]:
-        """Get user context with Redis fallback"""
-        # Try to get from memory first
+
         if user_id in self.user_contexts:
             return self.user_contexts[user_id]
         
@@ -392,8 +370,7 @@ class TravelAgentModel:
             if redis_context:
                 self.user_contexts[user_id] = redis_context
                 return redis_context
-        
-        # Initialize new context
+
         self._init_user_context(user_id)
         return self.user_contexts[user_id]
     
@@ -404,15 +381,11 @@ class TravelAgentModel:
             save_to_redis(context_key, self.user_contexts[user_id])
 
     def process_user_input(self, user_id: str, user_input: str) -> Dict[str, Any]:
-        """Main processing pipeline with personalization"""
-        # Get user context (from memory or Redis)
         user_context = self.get_user_context(user_id)
         
-        # Add message to conversation history
         user_context["conversation_history"].append({"role": "user", "content": user_input})
         
         try:
-            # Debugging checks
             print(f"\n=== Processing input for {user_id} ===")
             print(f"API Key: {'set' if self.openai_api_key else 'missing'}")
             print(f"Client initialized: {bool(self.openai_client)}")
@@ -421,7 +394,6 @@ class TravelAgentModel:
             if not self.openai_client:
                 raise ValueError("OpenAI client not initialized - check API key")
 
-            # Construct the prompt
             prompt = f"""You are an expert AI Travel Assistant. Provide detailed, structured response about:
     {user_input}
 
@@ -502,7 +474,6 @@ class TravelAgentModel:
                 }
     
     def _generate_follow_up_questions_with_openai(self, user_input: str) -> List[str]:
-        """Generate relevant follow-up questions using OpenAI"""
         try:
             prompt = f"""
             Based on this travel question: "{user_input}"
@@ -520,9 +491,8 @@ class TravelAgentModel:
             
             result = json.loads(response.choices[0].message.content)
             if "questions" in result and isinstance(result["questions"], list):
-                return result["questions"][:3]  # Return up to 3 questions
+                return result["questions"][:3]
             else:
-                # If the format is unexpected, try to extract questions from the response
                 content = response.choices[0].message.content
                 if isinstance(content, str):
                     # Try to parse as JSON
@@ -552,7 +522,6 @@ class TravelAgentModel:
             ]
 
     def update_user_preferences(self, user_id: str, preferences: Dict[str, Any]) -> Dict[str, Any]:
-        """Update user preferences"""
         user_context = self.get_user_context(user_id)
         user_context["preferences"] = preferences
         
@@ -562,7 +531,6 @@ class TravelAgentModel:
         return user_context["preferences"]
     
     def update_user_location(self, user_id: str, location: UserLocation) -> Dict[str, Any]:
-        """Update user location"""
         user_context = self.get_user_context(user_id)
         user_context["location"] = {
             "lat": location.lat,
@@ -575,9 +543,7 @@ class TravelAgentModel:
         
         return user_context["location"]
 
-    # Helper methods
     def _init_user_context(self, user_id: str):
-        """Initialize user context with default values"""
         if user_id not in self.user_contexts:
             self.user_contexts[user_id] = {
                 "preferences": {
@@ -604,9 +570,7 @@ class TravelAgentModel:
             }
 
     def _get_map_data(self, destination: str) -> Dict[str, Any]:
-        """Get map data for a destination using Google Maps API"""
         try:
-            # If we have a Google Maps API key, use it to get geocoding data
             if self.google_maps_api_key:
                 url = f"https://maps.googleapis.com/maps/api/geocode/json?address={destination}&key={self.google_maps_api_key}"
                 response = requests.get(url)
@@ -620,8 +584,7 @@ class TravelAgentModel:
                         "lng": location["lng"],
                         "address": data["results"][0]["formatted_address"]
                     }
-            
-            # Fallback to hardcoded coordinates for common destinations
+        
             coordinates = {
                 "paris": {"lat": 48.8566, "lng": 2.3522},
                 "tokyo": {"lat": 35.6762, "lng": 139.6503},
@@ -645,8 +608,7 @@ class TravelAgentModel:
                         "lng": coords["lng"],
                         "address": f"{destination}"
                     }
-            
-            # Default coordinates (center of world map)
+   
             return {
                 "name": destination,
                 "lat": 0,
@@ -655,7 +617,6 @@ class TravelAgentModel:
             }
         except Exception as e:
             print(f"Error in _get_map_data: {str(e)}")
-            # Default coordinates
             return {
                 "name": destination,
                 "lat": 0,
@@ -684,27 +645,21 @@ class UserMessage(BaseModel):
 @app.post("/chat", response_model=Dict[str, Any])
 @limiter.limit("10/minute")
 async def chat_endpoint(request: Request, user_message: UserMessage):
-    """Process user chat message and return AI response"""
     try:
         response = travel_agent.process_user_input(user_message.user_id, user_message.message)
         
-        # Add personalized recommendations based on user preferences
         if "message" in response:
-            # Get user context
             user_context = travel_agent.get_user_context(user_message.user_id)
             preferences = user_context.get("preferences", {})
             user_location = user_context.get("location", {})
-            
-            # Extract destination from message
+           
             destination = None
             for city in ["paris", "tokyo", "new york", "london", "rome"]:
                 if city in user_message.message.lower():
                     destination = city.title()
                     break
             
-            # If destination found, add travel information
             if destination:
-                # Get destination coordinates
                 dest_data = travel_agent._get_map_data(destination)
                 
                 # Calculate distance and estimate costs
@@ -715,14 +670,10 @@ async def chat_endpoint(request: Request, user_message: UserMessage):
                         dest_data["lat"], 
                         dest_data["lng"]
                     )
-                    
-                    # Get price level from preferences
                     price_level = preferences.get("price_preference", "$$ - Moderate")[0]
                     
-                    # Estimate flight cost
                     flight_cost = estimate_flight_cost(distance, price_level)
                     
-                    # Add travel info to response
                     response["travel_info"] = {
                         "origin": {
                             "lat": user_location["lat"],
@@ -735,18 +686,15 @@ async def chat_endpoint(request: Request, user_message: UserMessage):
                         "currency": "USD"
                     }
                 
-                # Add popular places
                 popular_places = get_popular_places(destination)
                 if popular_places:
                     response["popular_places"] = popular_places
-                
-                # Set destination in response data
+        
                 if "data" not in response:
                     response["data"] = {}
                 
                 response["data"]["locations"] = [dest_data]
                 
-                # Add route for Google Maps
                 if user_location and "lat" in user_location and "lng" in user_location:
                     response["route"] = {
                         "origin": {
@@ -759,24 +707,20 @@ async def chat_endpoint(request: Request, user_message: UserMessage):
                         }
                     }
             
-            # Add sample activities with price levels matching user preferences
             if "activities" not in response and destination:
                 price_level = preferences.get("price_preference", "$$ - Moderate")[0]
                 budget_range = preferences.get("budget_range", [800, 5000])
                 
-                # Generate sample activities based on preferences
                 response["activities"] = generate_sample_activities(
                     price_level, 
                     budget_range,
                     preferences.get("activities", [])
                 )
-            
-            # Add sample accommodations
+ 
             if "accommodations" not in response and ("stay" in user_message.message.lower() or destination):
                 price_level = preferences.get("price_preference", "$$ - Moderate")[0]
                 accommodation_type = preferences.get("accommodation_type", "Hotel")
                 
-                # Generate sample accommodations based on preferences
                 response["accommodations"] = generate_sample_accommodations(
                     price_level,
                     accommodation_type
@@ -788,7 +732,6 @@ async def chat_endpoint(request: Request, user_message: UserMessage):
 
 @app.post("/location/{user_id}", response_model=Dict[str, Any])
 async def update_location(user_id: str, location: UserLocation):
-    """Update user location"""
     try:
         updated_location = travel_agent.update_user_location(user_id, location)
         return {"location": updated_location, "status": "success"}
@@ -797,7 +740,6 @@ async def update_location(user_id: str, location: UserLocation):
 
 @app.get("/itinerary/{user_id}", response_model=Dict[str, Any])
 async def get_itinerary(user_id: str):
-    """Get user's travel itinerary"""
     try:
         user_context = travel_agent.get_user_context(user_id)
         return {"itinerary": user_context.get("itinerary", "")}
@@ -806,7 +748,6 @@ async def get_itinerary(user_id: str):
 
 @app.get("/preferences/{user_id}", response_model=Dict[str, Any])
 async def get_preferences(user_id: str):
-    """Get user preferences"""
     try:
         user_context = travel_agent.get_user_context(user_id)
         return {"preferences": user_context["preferences"]}
@@ -815,7 +756,6 @@ async def get_preferences(user_id: str):
 
 @app.post("/preferences/{user_id}", response_model=Dict[str, Any])
 async def update_preferences(user_id: str, preferences: Dict[str, Any] = Body(...)):
-    """Update user preferences"""
     try:
         updated_preferences = travel_agent.update_user_preferences(user_id, preferences)
         return {"preferences": updated_preferences, "status": "success"}
@@ -824,7 +764,6 @@ async def update_preferences(user_id: str, preferences: Dict[str, Any] = Body(..
 
 @app.post("/feedback")
 async def submit_feedback(request: Request, data: dict = Body(...)):
-    """Submit user feedback"""
     try:
         user_id = data.get("user_id")
         item_id = data.get("item_id")
@@ -847,18 +786,14 @@ async def submit_feedback(request: Request, data: dict = Body(...)):
 
 @app.post("/reset/{user_id}", response_model=Dict[str, str])
 async def reset_user(user_id: str):
-    """Reset user conversation and context"""
     try:
-        # Remove from memory
         if user_id in travel_agent.user_contexts:
             del travel_agent.user_contexts[user_id]
-        
-        # Remove from Redis
+
         if redis_conn:
             context_key = f"user_context:{user_id}"
             redis_conn.delete(context_key)
             
-            # Also delete conversation and preferences
             redis_conn.delete(f"conversation:{user_id}")
             redis_conn.delete(f"preferences:{user_id}")
             
@@ -868,12 +803,9 @@ async def reset_user(user_id: str):
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
     return {"status": "ok", "timestamp": datetime.now().isoformat()}
 
-# Helper functions for generating sample data
 def generate_sample_activities(price_level: str, budget_range: List[int], user_activities: List[str]) -> List[Dict[str, Any]]:
-    """Generate sample activities based on user preferences"""
     activities = []
     
     # Base price ranges
@@ -883,8 +815,7 @@ def generate_sample_activities(price_level: str, budget_range: List[int], user_a
         price_range = (100, 300)
     else:  # $$
         price_range = (50, 100)
-    
-    # Sample activities
+  
     activity_templates = [
         {
             "name": "Eiffel Tower Tour",
@@ -928,11 +859,8 @@ def generate_sample_activities(price_level: str, budget_range: List[int], user_a
         }
     ]
     
-    # Filter and adjust based on user preferences
     for template in activity_templates:
-        # Match price level
         if template["price_level"] == price_level:
-            # Match activities if specified
             if not user_activities or any(activity.lower() in template["category"].lower() for activity in user_activities):
                 # Generate a price within range
                 import random
@@ -942,7 +870,6 @@ def generate_sample_activities(price_level: str, budget_range: List[int], user_a
                 activity["price"] = price
                 activities.append(activity)
     
-    # Ensure we have at least 3 activities
     while len(activities) < 3:
         import random
         template = random.choice(activity_templates)
@@ -956,10 +883,8 @@ def generate_sample_activities(price_level: str, budget_range: List[int], user_a
     return activities
 
 def generate_sample_accommodations(price_level: str, accommodation_type: str) -> List[Dict[str, Any]]:
-    """Generate sample accommodations based on user preferences"""
     accommodations = []
     
-    # Base price ranges per night
     if price_level == "$":
         price_range = (50, 100)
     elif price_level == "$$$":
@@ -1011,21 +936,16 @@ def generate_sample_accommodations(price_level: str, accommodation_type: str) ->
         }
     ]
     
-    # Filter and adjust based on user preferences
     for template in accommodation_templates:
-        # Match price level
         if template["price_level"] == price_level:
-            # Match accommodation type if specified
             if accommodation_type.lower() in template["type"].lower() or accommodation_type == "Any":
-                # Generate a price within range
                 import random
                 price = random.randint(price_range[0], price_range[1])
                 
                 accommodation = template.copy()
                 accommodation["price"] = price
                 accommodations.append(accommodation)
-    
-    # Ensure we have at least 2 accommodations
+
     while len(accommodations) < 2:
         import random
         template = random.choice(accommodation_templates)

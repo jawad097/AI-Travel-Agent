@@ -1,4 +1,3 @@
-# frontend.py (Advanced Version)
 import streamlit as st
 import requests
 from datetime import datetime
@@ -13,13 +12,10 @@ import time
 import uuid
 import random
 
-# Load environment variables
 load_dotenv()
 
-# Backend API configuration
 BACKEND_URL = "http://127.0.0.1:8000"
 
-# Redis configuration for session persistence
 redis_client = redis.Redis(
     host=os.getenv("REDIS_HOST", "localhost"),
     port=int(os.getenv("REDIS_PORT", 6379)),
@@ -27,7 +23,6 @@ redis_client = redis.Redis(
     decode_responses=True
 )
 
-# Check Redis connection
 try:
     redis_client.ping()
     print("Connected to Redis successfully!")
@@ -36,19 +31,14 @@ except redis.ConnectionError:
     redis_client = None
 
 def initialize_session():
-    """Initialize session state variables with Redis persistence"""
-    # Generate or retrieve user ID
     if 'user_id' not in st.session_state:
-        # Try to get user ID from cookie
         if 'travel_assistant_user_id' in st.session_state:
             st.session_state.user_id = st.session_state.travel_assistant_user_id
         else:
             st.session_state.user_id = f"user_{uuid.uuid4()}"
             st.session_state.travel_assistant_user_id = st.session_state.user_id
     
-    # Initialize conversation history
     if 'conversation' not in st.session_state:
-        # Try to load from Redis
         if redis_client:
             try:
                 redis_key = f"conversation:{st.session_state.user_id}"
@@ -63,10 +53,8 @@ def initialize_session():
                 st.session_state.conversation = []
         else:
             st.session_state.conversation = []
-    
-    # Initialize preferences
+
     if 'preferences' not in st.session_state:
-        # Try to load from Redis
         if redis_client:
             try:
                 redis_key = f"preferences:{st.session_state.user_id}"
@@ -83,7 +71,6 @@ def initialize_session():
             st.session_state.preferences = get_default_preferences()
 
 def get_default_preferences():
-    """Return default preferences structure"""
     return {
         'destination': None,
         'budget_range': [800, 5000],
@@ -100,7 +87,6 @@ def get_default_preferences():
     }
 
 def save_to_redis(key_prefix, data):
-    """Save data to Redis with expiration"""
     if redis_client:
         try:
             redis_key = f"{key_prefix}:{st.session_state.user_id}"
@@ -114,7 +100,6 @@ def save_to_redis(key_prefix, data):
     return False
 
 def set_futuristic_style():
-    """Apply advanced futuristic styling with animations"""
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Roboto:wght@300;400;500&display=swap');
@@ -310,19 +295,14 @@ def set_futuristic_style():
     """, unsafe_allow_html=True)
 
 def display_budget_analysis(budget_range):
-    """Show advanced interactive budget visualization"""
     with st.expander("💰 Budget Analysis & Optimization", expanded=True):
         col1, col2 = st.columns(2)
         
-        # Calculate budget allocation based on preferences
         with col1:
             st.markdown("### Smart Budget Allocation")
-            
-            # Adjust allocation based on preferences
             price_level = st.session_state.preferences['price_preference']
             accommodation_type = st.session_state.preferences['accommodation_type']
             
-            # Dynamic allocation based on preferences
             if price_level == '$ - Budget':
                 accommodation = 0.20
                 food = 0.20
@@ -331,12 +311,11 @@ def display_budget_analysis(budget_range):
                 accommodation = 0.40
                 food = 0.20
                 activities = 0.15
-            else:  # Moderate
+            else:
                 accommodation = 0.30
                 food = 0.20
                 activities = 0.20
                 
-            # Adjust for accommodation type
             if accommodation_type == 'Hostel':
                 accommodation -= 0.10
                 activities += 0.05
@@ -346,13 +325,11 @@ def display_budget_analysis(budget_range):
                 activities -= 0.05
                 food -= 0.05
                 
-            # Calculate remaining for transportation
-            transportation = 1.0 - (accommodation + food + activities + 0.10)  # 0.10 for miscellaneous
+            transportation = 1.0 - (accommodation + food + activities + 0.10)
             
             categories = ['Accommodation', 'Food', 'Activities', 'Transportation', 'Miscellaneous']
             values = [accommodation, food, activities, transportation, 0.10]
             
-            # Create a more advanced pie chart with hover info
             fig = go.Figure(data=[go.Pie(
                 labels=categories,
                 values=values,
@@ -383,7 +360,6 @@ def display_budget_analysis(budget_range):
             
             st.plotly_chart(fig, use_container_width=True)
             
-            # Display actual amounts
             total_budget = (budget_range[0] + budget_range[1]) / 2
             st.markdown("#### Estimated Costs")
             for cat, val in zip(categories, values):
@@ -393,20 +369,15 @@ def display_budget_analysis(budget_range):
         with col2:
             st.markdown("### Price Optimization")
             
-            # Create a more advanced visualization showing price optimization
-            # Generate some sample data for different price points
             price_points = ['Budget', 'Value', 'Premium', 'Luxury']
             satisfaction = [65, 80, 90, 95]
             costs = [budget_range[0], (budget_range[0] + budget_range[1])/3, 
                     2*(budget_range[0] + budget_range[1])/3, budget_range[1]]
             
-            # Calculate value score (satisfaction per dollar)
             value_score = [s/(c/100) for s, c in zip(satisfaction, costs)]
             
-            # Create a dual-axis chart
             fig = go.Figure()
             
-            # Add bars for costs
             fig.add_trace(go.Bar(
                 x=price_points,
                 y=costs,
@@ -415,7 +386,6 @@ def display_budget_analysis(budget_range):
                 opacity=0.7
             ))
             
-            # Add line for satisfaction
             fig.add_trace(go.Scatter(
                 x=price_points,
                 y=satisfaction,
@@ -425,10 +395,8 @@ def display_budget_analysis(budget_range):
                 yaxis='y2'
             ))
             
-            # Add markers for value score
             max_value_index = value_score.index(max(value_score))
             
-            # Highlight the best value option
             fig.add_annotation(
                 x=price_points[max_value_index],
                 y=costs[max_value_index] + 500,
@@ -446,7 +414,6 @@ def display_budget_analysis(budget_range):
                 opacity=0.8
             )
             
-            # Update layout for dual y-axes
             fig.update_layout(
                 yaxis=dict(
                     title=dict(text='Cost ($)', font=dict(color='#0077b6')),
@@ -475,24 +442,18 @@ def display_budget_analysis(budget_range):
             
             st.plotly_chart(fig, use_container_width=True)
             
-            # Add a budget optimization tip
             st.info(f"💡 **Budget Tip**: The '{price_points[max_value_index]}' option offers the best value for your preferences.")
 
 def display_recommendation_card(item, item_type):
-    """Show advanced recommendation cards with personalization indicators"""
-    # Calculate match score based on user preferences
     match_score = calculate_match_score(item, item_type)
     
-    # Generate a unique ID for this card
     card_id = f"{item_type}_{item.get('name', 'item').replace(' ', '_').lower()}_{int(time.time())}"
     
     # Format price display
     price_display = format_price_display(item.get('price', 'N/A'), item_type)
     
-    # Generate tags based on item properties
     tags = generate_item_tags(item, item_type)
     
-    # Create personalization indicators
     personalization_indicators = []
     if match_score > 85:
         personalization_indicators.append("Perfect Match")
@@ -506,7 +467,6 @@ def display_recommendation_card(item, item_type):
     for indicator in personalization_indicators:
         badges_html += f'<span class="badge">{indicator}</span>'
     
-    # Format tags as a string
     tags_str = ", ".join(tags)
     
     # Create the card content
@@ -544,16 +504,13 @@ def display_recommendation_card(item, item_type):
         st.markdown(card_html, unsafe_allow_html=True)
 
 def calculate_match_score(item, item_type):
-    """Calculate how well an item matches user preferences"""
-    score = 70  # Base score
+    score = 70
     
-    # Price match
     price_level = st.session_state.preferences['price_preference']
     item_price = item.get('price_level', '$$')
     if price_level[0] == item_price:
         score += 15
     
-    # Activity match
     if item_type == 'activity':
         user_activities = st.session_state.preferences['activities']
         item_category = item.get('category', '').lower()
@@ -563,18 +520,15 @@ def calculate_match_score(item, item_type):
                 score += 10
                 break
     
-    # Accommodation type match
     if item_type == 'hotel':
         user_accom_type = st.session_state.preferences['accommodation_type'].lower()
         item_type = item.get('type', '').lower()
         
         if user_accom_type in item_type:
             score += 15
-    
-    # Add some randomness to avoid all items having the same score
+
     score += random.randint(-5, 5)
-    
-    # Ensure score is within bounds
+ 
     return max(min(score, 98), 60)
 
 def format_price_display(price, item_type):
@@ -587,15 +541,12 @@ def format_price_display(price, item_type):
     return price
 
 def generate_item_tags(item, item_type):
-    """Generate tags based on item properties"""
     tags = []
     
-    # Common tags
     if item.get('price', 0) < st.session_state.preferences['budget_range'][0]:
         tags.append("budget_friendly")
     
     if item_type == 'activity':
-        # Activity-specific tags
         category = item.get('category', '').lower()
         if 'adventure' in category:
             tags.append("Adventure")
@@ -633,7 +584,6 @@ def generate_item_tags(item, item_type):
     return tags
 
 def create_feedback_buttons(item_name, card_id):
-    """Generate advanced feedback buttons with hover effects"""
     return f"""
     <div style="display: flex; gap: 10px; margin-top: 15px;">
         <button onclick="document.getElementById('{card_id}').style.borderColor='rgba(46, 204, 113, 0.5)'"
@@ -652,7 +602,6 @@ def create_feedback_buttons(item_name, card_id):
     """
 
 def preferences_sidebar():
-    """Enhanced preferences sidebar with budget controls"""
     with st.sidebar:
         st.header("⚙️ Travel Preferences")
         
@@ -691,7 +640,6 @@ def preferences_sidebar():
         if st.button("🔄 Apply Preferences", use_container_width=True):
             update_preferences_backend()
         
-        # Add a direct button to skip onboarding
         if 'onboarded' not in st.session_state:
             st.markdown("---")
             if st.button("⏩ Skip to Chat Interface", use_container_width=True):
@@ -699,7 +647,6 @@ def preferences_sidebar():
                 st.rerun()
 
 def update_preferences_backend():
-    """Send preferences to backend with Redis caching"""
     try:
         response = requests.post(
             f"{BACKEND_URL}/preferences/{st.session_state.user_id}",
@@ -713,15 +660,12 @@ def update_preferences_backend():
         st.error(f"Connection error: {str(e)}")
 
 def chat_interface():
-    """Modern chat interface with enhanced features"""
     st.title("🌍 AI Travel Assistant")
     st.markdown("### Your Smart Travel Planning Companion")
     
-    # Debug information
     st.info(f"User ID: {st.session_state.user_id}")
     st.info(f"Backend URL: {BACKEND_URL}")
     
-    # Conversation History
     if len(st.session_state.conversation) > 0:
         for msg in st.session_state.conversation:
             with st.chat_message(msg["role"]):
@@ -729,22 +673,18 @@ def chat_interface():
                 if "data" in msg and msg["role"] == "assistant":
                     display_enhanced_recommendations(msg["data"])
     else:
-        # Show a welcome message if no conversation history
         with st.chat_message("assistant"):
             st.markdown("👋 Hello! I'm your AI Travel Assistant. Ask me about any destination, and I'll help you plan your perfect trip!")
             st.markdown("Try asking something like: *'I want to go to Paris'* or *'Tell me about Tokyo'*")
     
-    # Budget Analysis Section
     display_budget_analysis(st.session_state.preferences['budget_range'])
     
-    # User Input - Always show the chat input
     prompt = st.chat_input("Ask about your trip...", key="chat_input")
     if prompt:
         handle_user_input(prompt)
         st.rerun()
 
 def display_enhanced_recommendations(response):
-    """Show recommendations with personalization filters"""
     if 'activities' in response:
         st.subheader("🎯 Recommended Activities")
         for activity in response.get('activities', []):
@@ -759,21 +699,15 @@ def display_enhanced_recommendations(response):
                 display_recommendation_card(hotel, 'hotel')
 
 def handle_user_input(prompt):
-    """Process user input and get AI response"""
-    # Add user message to chat
     st.session_state.conversation.append({"role": "user", "content": prompt})
     
-    # Save conversation to Redis for persistence
     save_to_redis("conversation", st.session_state.conversation)
     
-    # Get AI response
     try:
-        # Show loading message
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             message_placeholder.write("Thinking...")
             
-            # Make the request to the backend
             response = requests.post(
                 f"{BACKEND_URL}/chat",
                 json={
@@ -796,14 +730,11 @@ def handle_user_input(prompt):
                     "data": ai_response
                 })
                 
-                # Save updated conversation to Redis
                 save_to_redis("conversation", st.session_state.conversation)
                 
-                # Display any recommendations or additional data
                 if "activities" in ai_response or "accommodations" in ai_response:
                     display_enhanced_recommendations(ai_response)
                 
-                # Show follow-up questions if available
                 if "next_questions" in ai_response and ai_response["next_questions"]:
                     st.markdown("**You might also want to ask:**")
                     for question in ai_response["next_questions"]:
@@ -814,9 +745,7 @@ def handle_user_input(prompt):
         st.error(f"Error communicating with backend: {str(e)}")
         print(f"Error details: {str(e)}")
 
-# Main function to run the app
 def main():
-    """Main function to run the Streamlit app"""
     # Set page config
     st.set_page_config(
         page_title="AI Travel Assistant",
